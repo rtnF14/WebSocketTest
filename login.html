@@ -1,0 +1,179 @@
+<html>
+<head>
+	<title>slm</title>
+</head>
+<body>
+
+	<div id="page_login">
+	<center><img src="favicon.ico" id="logo"></center>
+	<form id="l" action="/l" method="post">
+		<h2>Username</h2>
+		<input type="text" id="u" required autofocus><br>
+		<h2>Password</h2>
+		<input type="password" id="p" required><br>
+		<button type="submit">Sign In</button>
+	</form>
+	<center><h5 id="wr" style="display: none">Incorrect username or password</h5></center>
+	</div>
+
+	<div id="page_home">
+	
+
+	</div>
+
+
+
+<h5 id="dc" style="display:none">Connection lost. Trying to reconnect</h5>
+
+</body>
+</html>
+<style>
+#wr {
+  font-family: sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  margin: 0px;
+  padding: 12px;
+  width: 241px;
+  text-align: center;
+  background-color: #ffdce0;
+  color: #86181d;
+  border-color: rgba(27,31,35,.15);
+  border: 1px solid rgba(27,31,35,.15);
+  margin-top: -11px;
+  border-radius: 7px;
+  margin:-11px auto;
+}
+#logo {
+
+	    text-align: center;
+    border-radius: 500px;
+    width: 79px;
+        border: 2px solid #d8dee2;
+    margin-top: 123px;
+    margin-bottom: -36px;
+}
+body{
+	background-color: #f9f9f9;
+	margin: 0px;
+}
+h1 {
+	text-align: center;
+	font-family: helvetica;
+	font-weight: 400;
+}
+h2 {
+	color: #24292e;
+  font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol;
+  font-size: 14px;
+	line-height: 1.5;
+	font-weight: 600;
+	text-align: left;
+  margin-left: 27px;
+}
+#q{
+	resize: none;
+	width: 500px;
+	height: 400px;	
+}
+#l {
+    text-align: center;
+    background-color: #fff;
+    border: 1px solid #d8dee2;
+    border-radius: 5px;
+    margin: 0 auto;
+    width: 323px;
+    height: 234px;
+    padding-top: 28px;
+}
+#l button {
+	    background-color: #28a745;
+    background-image: linear-gradient(-180deg,#34d058,#28a745 90%);
+    color: #fff;
+    border: 1px solid rgba(27,31,35,.2);
+    border-radius: .25em;
+        padding: 6px 12px;
+        font-size: 14px;
+    font-weight: 600;
+    background-position: -1px -1px;
+    background-repeat: repeat-x;
+    background-size: 110% 110%;
+    vertical-align: middle;
+    width: 275px;
+    height: 37px;
+    margin-top: 26px;
+}
+#l input{
+	height: 29px;
+    width: 275px;
+    border-radius: 2px;
+    border: 1px solid #d1d5da;
+    padding-left: 9px;
+}
+</style>
+<script>
+var sock;
+var isConnect;
+
+function connectionStatus(stat){
+	let a = document.querySelector("#dc"); 
+	if (stat == true) {
+		a.style.display = "none";
+		isConnect = true
+	}
+	else {
+		a.style.display = "block"
+		isConnect = false
+	}
+}
+
+function connect(){
+	sock = new WebSocket("ws://localhost:3001")
+	sock.onopen = () => {
+		connectionStatus(true);
+		sock.send("boi!")
+	}
+	sock.onmessage = (e) => {
+		console.log(e.data)
+		
+		let messageFromServer = e.data.split('#')
+		if (messageFromServer[0] == 'l') {
+			if (messageFromServer[1] == '0') {
+				let a = document.querySelector("#wr"); 
+				a.innerHTML = "Incorrect username or password"
+				a.style.display = "block"
+			}
+			else {
+				let a = document.querySelector("#wr");
+				a.innerHTML = "Login success"
+				a.style.display = "block" 
+				let b = document.querySelector("#page_login");
+				b.style.display = "none"
+			}
+		}
+
+	}
+	sock.onclose = (e) => {
+		console.log("Reconnect in 1 second");	
+		setTimeout(function(){
+			connect();
+		},1000);
+	}
+	sock.onerror = (e) => {
+		connectionStatus(false);
+		console.log("Connection error ");
+		sock.close();
+	}
+}
+
+connect();
+var form = document.querySelector("#l");
+form.onsubmit = function(e) {
+	e.preventDefault();
+	var u = document.querySelector("#u")
+	var p = document.querySelector("#p")	
+	sock.send("l#"+u.value+"#"+p.value)
+}
+
+
+</script>
