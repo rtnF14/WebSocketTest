@@ -2,15 +2,17 @@
 const http = require('http');
 const fs = require('fs');
 const qs = require('querystring');
-const mysql = require('./mysql');
+const mysql = require('./mysql-master');
 const WebSocket = require("./websocket");
 WebSocket.Server = require("./websocket-server");
+const crypto = require('crypto');
+
 
 //Server configuration
 const hostname = 'localhost';
 const port = 3000;
 
-//Send file to client
+//Send file to client via HTTP
 function sendFile(res,filePath,contentType){
 	fs.readFile(filePath, function(error,content){
 		if (error){
@@ -25,9 +27,37 @@ function sendFile(res,filePath,contentType){
 	})
 }
 
+
+
+//---------------------------------------------------------
+//Encryption Module for Cookie validation
+
+let algorithm = 'aes-256-cbc';
+let key = 'ExchangePasswordPasswordExchange';
+let iv = crypto.randomBytes(16);
+iv = iv.toString('hex').slice(0, 16);
+function encrypt(text){
+	let cipher = crypto.createCipheriv(algorithm,key,iv);
+	let crypted = cipher.update(text,'utf8','hex');
+	crypted += cipher.final('hex');
+	return crypted;
+}
+function decrypt(text){
+	let decipher = crypto.createDecipheriv(algorithm,key,iv);
+	let dec = decipher.update(text,'hex','utf8');
+	dec += decipher.final('utf8');
+	return dec;
+}
+//---------------------------------------------------------
+
+
+
+
+
+let clientUserAgent;
+
 //Config http server
 const server = http.createServer((req,res) => {
-
 	//Printout HTTP request detail (for debug reasons)
 	var url = req.url;
 	var http_method = req.method;
@@ -36,8 +66,20 @@ const server = http.createServer((req,res) => {
 	console.log(req.headers);
 	console.log("\n");
 
+	clientUserAgent = req.headers['user-agent']
+	if (req.headers['cookie']) {
+		console.log("ADA KUKI!")
+		let cookie = req.headers['cookie']
+		cookie = cookie.split('=')
+		cookie = cookie[1]
+		cookie = decrypt(cookie)
+		console.log(cookie)
+
+	}
 	
-	//Handle POST
+
+	
+	//Handle HTTP POST
 	if ((http_method == 'POST')&&(url=='/l')) {
 		var body = '';
 		req.on('data', function(data){
@@ -55,14 +97,13 @@ const server = http.createServer((req,res) => {
 	if (url == '/favicon.ico'){
 		sendFile(res,"./logo.png","image/apng");
 	}
-	else if (url == '/logo2.png'){
-		sendFile(res,"./logo2.png","image/apng");
-	}
 	//Send index page
+	else if (url == '/off.png'){
+		sendFile(res,"./off.png","image/apng");
+	}
 	else {
 		sendFile(res,"./login.html","text/html");
 	}
-
 })
 
 
@@ -74,7 +115,7 @@ server.listen(port,hostname, () => {
 // Start websocket server at port 3001
 const wss = new WebSocket.Server({port:3001});
 
-// Start connection to mysql
+// Start connection to mysql. Connect to "slm" database
 var mysql_connection = mysql.createConnection({
 	host : 'localhost',
 	user : 'root',
@@ -86,28 +127,34 @@ mysql_connection.query('USE slm', function(err,rows,fields){
 })
 
 
-class User {
-	constructor(uid,ws){
-		this.uid = uid;
-		this.ws = ws;
-	}
-}
 
+
+//Representing single client connection
 class ClientConnection {
-	constructor(ws){
+	constructor(ws,agent){
 		this.ws = ws
 		this.addr = ws._socket.remoteAddress
 		this.port = ws._socket.remotePort
+		this.uid = 0
+		this.agent = agent
 	}
 	login(uid){
 		this.uid = uid
 	}
-	printClientInfo(){
-		console.log("From : " + this.addr + this.port)
-		console.log("UID : " + this.uid)
+	clientID(){
+		return String(this.uid) + "-" + String(this.addr) +"-"+String(this.port)+"-"+String(this.agent)
 	}
+	clientFingerprint(){
+		return String(this.uid) + "-" +String(this.agent)
+	}
+	printClientInfo(){
+		console.log(this.clientID())
+	}
+	
+
 }
 
+//Representing a whole client connections currently online
 class listOfClients {
 	constructor() {
 		this.clients = []
@@ -116,6 +163,8 @@ class listOfClients {
 		this.clients.push(c)
 	}
 	removeClient(c){
+		let cID = c.clientID()
+		console.log(cID + " signing off..")
 		let idx = this.clients.indexOf(c)
 		if (idx > -1) {
 			this.clients.splice(idx,1);
@@ -133,11 +182,13 @@ class listOfClients {
 let onlineUsers = new listOfClients()
 
 
-//When a connection come in
+
+
+
+//When a single client connection come in
 wss.on('connection', (ws,req) => {
-	//Client address
-	let client = new ClientConnection(ws)
-	client.printClientInfo()
+	
+	let client = new ClientConnection(ws,clientUserAgent)
 	onlineUsers.addClient(client)
 	onlineUsers.printStatus()
 
@@ -155,6 +206,10 @@ wss.on('connection', (ws,req) => {
 					ws.send("l#1#"+rows[0].id)
 					client.login(rows[0].id)
 					client.printClientInfo()
+					cookieID = encrypt(client.clientFingerprint())
+					console.log(cookieID)
+					console.log(decrypt(cookieID))
+					ws.send("c#"+cookieID)
 				}
 				else{
 					ws.send("l#0")
@@ -168,7 +223,6 @@ wss.on('connection', (ws,req) => {
 		console.log("closee!")
 		onlineUsers.removeClient(client)
 		onlineUsers.printStatus()
-
 	})
 
 
