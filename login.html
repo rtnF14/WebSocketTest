@@ -17,7 +17,7 @@
  				<input type="submit" style="display:none" class="inputbutton searchbutton" value="Go">
  			</form>
  		</div>
- 		<img src="off.png" id="signout_button">
+ 		<img src="off.png" onclick="signout()" id="signout_button">
 	</div>
 
 	<div id="page_login">
@@ -210,8 +210,11 @@ function connect(){
 		}
 		//For Cookie Set
 		else if (messageFromServer[0] == 'c') {
-			console.log("cook")
-			document.cookie ="session="+messageFromServer[1];
+			console.log("cooky")
+			let exp_date = new Date()
+			exp_date.setFullYear(exp_date.getFullYear()+1)
+			exp_date = exp_date.toUTCString()
+			document.cookie ="session="+messageFromServer[1]+";path=/;expires="+exp_date;
 		}
 
 	}
@@ -235,6 +238,21 @@ form.onsubmit = function(e) {
 	var u = document.querySelector("#u")
 	var p = document.querySelector("#p")	
 	sock.send("l#"+u.value+"#"+p.value)
+}
+
+function signout() {
+	let exp_date = new Date()
+	exp_date.setFullYear(exp_date.getFullYear()-5)
+	exp_date = exp_date.toUTCString()
+	sock.send("lg#")
+	document.cookie ="session=;path=/;expires="+exp_date;
+	let a = document.querySelector("#wr");
+	a.style.display = "none"
+	let b = document.querySelector("#page_home");
+	b.style.display = "none"
+	let c = document.querySelector("#page_login");
+	c.style.display = "block"
+
 }
 
 

@@ -8,10 +8,8 @@ WebSocket.Server = require("./websocket-server");
 const crypto = require('crypto');
 
 
-//Server configuration
-const hostname = 'localhost';
-const port = 3000;
 
+//---------------------------------------------------------
 //Send file to client via HTTP
 function sendFile(res,filePath,contentType){
 	fs.readFile(filePath, function(error,content){
@@ -26,7 +24,7 @@ function sendFile(res,filePath,contentType){
 		}
 	})
 }
-
+//---------------------------------------------------------
 
 
 //---------------------------------------------------------
@@ -34,51 +32,64 @@ function sendFile(res,filePath,contentType){
 
 let algorithm = 'aes-256-cbc';
 let key = 'ExchangePasswordPasswordExchange';
-let iv = crypto.randomBytes(16);
+//let iv = crypto.randomBytes(16);
+let iv = "asdfasdfasdfasdf"
+console.log(iv)
 iv = iv.toString('hex').slice(0, 16);
 function encrypt(text){
 	let cipher = crypto.createCipheriv(algorithm,key,iv);
-	let crypted = cipher.update(text,'utf8','hex');
+	let crypted = cipher.update(text,'ascii','hex');
 	crypted += cipher.final('hex');
 	return crypted;
 }
 function decrypt(text){
 	let decipher = crypto.createDecipheriv(algorithm,key,iv);
-	let dec = decipher.update(text,'hex','utf8');
-	dec += decipher.final('utf8');
+	let dec = decipher.update(text,'hex','ascii');
+	dec += decipher.final('ascii');
 	return dec;
 }
 //---------------------------------------------------------
 
 
 
-
+function parseCookies(req){
+	let list = {}
+	let rc = req.headers.cookie;
+	rc && rc.split(';').forEach(function(cookie){
+		let parts = cookie.split('=');
+		list[parts.shift().trim()] = decodeURI(parts.join('='))
+	});
+	return list;
+}
 
 let clientUserAgent;
+let rememberMe = 0
 
 //Config http server
 const server = http.createServer((req,res) => {
 	//Printout HTTP request detail (for debug reasons)
 	var url = req.url;
 	var http_method = req.method;
-	console.log("URL :" + url );
-	console.log("Method : " + http_method)
+	console.log(http_method +":" + url );
 	console.log(req.headers);
 	console.log("\n");
 
 	clientUserAgent = req.headers['user-agent']
 	if (req.headers['cookie']) {
-		console.log("ADA KUKI!")
-		let cookie = req.headers['cookie']
-		cookie = cookie.split('=')
-		cookie = cookie[1]
-		cookie = decrypt(cookie)
-		console.log(cookie)
-
+		let cookies = parseCookies(req)
+		if (cookies['session']){
+			let cookieID = cookies['session']
+			cookieID = decrypt(cookieID)
+			cookieID = cookieID.split("--.--")
+			if (cookieID[1] == clientUserAgent){
+				console.log("PASS!!")
+				rememberMe = cookieID[0]
+			}
+			console.log(cookieID)
+		}
 	}
 	
 
-	
 	//Handle HTTP POST
 	if ((http_method == 'POST')&&(url=='/l')) {
 		var body = '';
@@ -108,6 +119,8 @@ const server = http.createServer((req,res) => {
 
 
 // Start http server at port 3000
+const hostname = 'localhost';
+const port = 3000;
 server.listen(port,hostname, () => {
 	console.log('Server running at http://'+hostname+':'+port);
 })
@@ -115,11 +128,11 @@ server.listen(port,hostname, () => {
 // Start websocket server at port 3001
 const wss = new WebSocket.Server({port:3001});
 
-// Start connection to mysql. Connect to "slm" database
+// Start connection to mysql
 var mysql_connection = mysql.createConnection({
 	host : 'localhost',
 	user : 'root',
-	password : 'root',
+	password : 'root'
 })
 mysql_connection.connect()
 mysql_connection.query('USE slm', function(err,rows,fields){
@@ -145,7 +158,7 @@ class ClientConnection {
 		return String(this.uid) + "-" + String(this.addr) +"-"+String(this.port)+"-"+String(this.agent)
 	}
 	clientFingerprint(){
-		return String(this.uid) + "-" +String(this.agent)
+		return String(this.uid) + "--.--" +String(this.agent)
 	}
 	printClientInfo(){
 		console.log(this.clientID())
@@ -192,6 +205,10 @@ wss.on('connection', (ws,req) => {
 	onlineUsers.addClient(client)
 	onlineUsers.printStatus()
 
+	if (rememberMe) {
+		ws.send("l#1#"+rememberMe)
+	}
+
 	//When the connection give us message
 	ws.on('message', message => {
 		//Handle message protocol
@@ -215,6 +232,9 @@ wss.on('connection', (ws,req) => {
 					ws.send("l#0")
 				}
 			})
+		}
+		else if (a[0] == 'lg'){
+			rememberMe = 0;
 		}
 
 	})
